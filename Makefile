@@ -78,7 +78,7 @@ libheatmap.a: $(OBJS)
 	$(AR) rs $@ $^
 
 libheatmap.so: $(OBJS)
-	$(CC) $(LDFLAGS) -shared -o $@ $^
+	$(CC) $(COMMON) $(CFLAGS) -shared -o $@ $^ $(LDFLAGS)
 
 tests/test.o: tests/test.cpp
 	$(CXX) -c $< $(CXXFLAGS) -o $@
