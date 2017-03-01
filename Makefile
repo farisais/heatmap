@@ -1,10 +1,31 @@
 CC?=gcc
 CXX?=g++
+NVCC=/usr/local/cuda-8.0/bin/nvcc 
+
+ARCH= -gencode arch=compute_20,code=[sm_20,sm_21] \
+      -gencode arch=compute_30,code=sm_30 \
+      -gencode arch=compute_35,code=sm_35 \
+      -gencode arch=compute_50,code=[sm_50,compute_50] \
+      -gencode arch=compute_52,code=[sm_52,compute_52]
 AR?=ar
+GPU=1
+COMMON=
 
 # Release mode (If just dropping the lib into your project, check out -flto too.)
-FLAGS=-fPIC -Wall -Wextra -I. -O3 -g -DNDEBUG -fopenmp -Wa,-ahl=$(@:.o=.s)
+FLAGS=-fPIC -Wall -Wextra -I. -O3 -g -DNDEBUG -fopenmp
 LDFLAGS=-fopenmp -O3 -lm
+
+CFLAGS=$(FLAGS) -pedantic
+CXXFLAGS=$(FLAGS) -std=c++0x
+
+OBJS=heatmap.o $(patsubst %.c,%.o,$(wildcard colorschemes/*.c))
+
+ifeq ($(GPU), 1) 
+CFLAGS+= -DGPU
+COMMON+= -DGPU -I/usr/local/cuda/include/
+LDFLAGS+= -L/usr/local/cuda/lib64 -lcuda -lcudart -lcublas -lcurand
+OBJS+= render.o
+endif
 
 # Debug mode
 # FLAGS=-fPIC -Wall -Wextra -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC -I. -O0 -g -fopenmp -Wa,-ahl=$(@:.o=.s)
@@ -15,8 +36,6 @@ LDFLAGS=-fopenmp -O3 -lm
 # Also generate .s assembly output file:
 # FLAGS=$(FLAGS) -Wa,-ahl=$(@:.o=.s)
 
-CFLAGS=$(FLAGS) -pedantic
-CXXFLAGS=$(FLAGS) -std=c++0x
 
 .PHONY: all benchmarks samples clean
 
@@ -28,6 +47,7 @@ examples: examples/heatmap_gen examples/heatmap_gen_weighted examples/simplest_c
 clean:
 	rm -f libheatmap.a
 	rm -f libheatmap.so
+	rm -f render.o
 	rm -f benchs/add_point_with_stamp
 	rm -f benchs/rendering
 	rm -f examples/heatmap_gen
@@ -48,13 +68,16 @@ test: tests
 heatmap.o: heatmap.c heatmap.h
 	$(CC) -c $< $(CFLAGS) -o $@
 
+render.o: render_kernel.cu
+	$(NVCC) $(ARCH) $(COMMON) --compiler-options "$(CFLAGS)" -c $< -o $@
+
 colorschemes/%.o: colorschemes/%.c colorschemes/%.h
 	$(CC) -c $< $(CFLAGS) -o $@
 
-libheatmap.a: heatmap.o $(patsubst %.c,%.o,$(wildcard colorschemes/*.c))
+libheatmap.a: $(OBJS)
 	$(AR) rs $@ $^
 
-libheatmap.so: heatmap.o $(patsubst %.c,%.o,$(wildcard colorschemes/*.c))
+libheatmap.so: $(OBJS)
 	$(CC) $(LDFLAGS) -shared -o $@ $^
 
 tests/test.o: tests/test.cpp

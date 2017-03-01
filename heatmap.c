@@ -24,10 +24,15 @@
 
 #include "heatmap.h"
 
+#ifdef GPU
+#include "render.h"
+#endif
+
 #include <stdlib.h> /* malloc, calloc, free */
 #include <string.h> /* memcpy, memset */
 #include <math.h>   /* sqrtf */
 #include <assert.h> /* assert, #define NDEBUG to ignore. */
+
 
 /* Having a default stamp ready makes it easier for simple usage of the library
  * since there is no need to create a new stamp.
@@ -194,36 +199,41 @@ unsigned char* heatmap_render_saturated_to(const heatmap_t* h, const heatmap_col
         }
     }
 
-    /* TODO: could actually even flatten this loop before parallelizing it. */
-    /* I.e., to go i = 0 ; i < h*w since I don't have any padding! (yet?) */
-    for(y = 0 ; y < h->h ; ++y) {
-        float* bufline = h->buf + y*h->w;
-        unsigned char* colorline = colorbuf + 4*y*h->w;
+    #ifndef GPU
+	    /* TODO: could actually even flatten this loop before parallelizing it. */
+	    /* I.e., to go i = 0 ; i < h*w since I don't have any padding! (yet?) */
+	    for(y = 0 ; y < h->h ; ++y) {
+	        float* bufline = h->buf + y*h->w;
+	        unsigned char* colorline = colorbuf + 4*y*h->w;
 
-        unsigned x;
-        for(x = 0 ; x < h->w ; ++x, ++bufline) {
-            /* Saturate the heat value to the given saturation, and then
-             * normalize by that.
-             */
-            const float val = (*bufline > saturation ? saturation : *bufline)/saturation;
+	        unsigned x;
+	        for(x = 0 ; x < h->w ; ++x, ++bufline) {
+	            /* Saturate the heat value to the given saturation, and then
+	             * normalize by that.
+	             */
+	            const float val = (*bufline > saturation ? saturation : *bufline)/saturation;
 
-            /* We add 0.5 in order to do real rounding, not just dropping the
-             * decimal part. That way we are certain the highest value in the
-             * colorscheme is actually used.
-             */
-            const size_t idx = (size_t)((float)(colorscheme->ncolors-1)*val + 0.5f);
+	            /* We add 0.5 in order to do real rounding, not just dropping the
+	             * decimal part. That way we are certain the highest value in the
+	             * colorscheme is actually used.
+	             */
+	            const size_t idx = (size_t)((float)(colorscheme->ncolors-1)*val + 0.5f);
 
-            /* This is probably caused by a negative entry in the stamp! */
-            assert(val >= 0.0f);
+	            /* This is probably caused by a negative entry in the stamp! */
+	            assert(val >= 0.0f);
 
-            /* This should never happen. It is likely a bug in this library. */
-            assert(idx < colorscheme->ncolors);
+	            /* This should never happen. It is likely a bug in this library. */
+	            assert(idx < colorscheme->ncolors);
 
-            /* Just copy over the color from the colorscheme. */
-            memcpy(colorline, colorscheme->colors + idx*4, 4);
-            colorline += 4;
-        }
-    }
+	            /* Just copy over the color from the colorscheme. */
+	            memcpy(colorline, colorscheme->colors + idx*4, 4);
+	            colorline += 4;
+	        }
+	    }
+	   #else
+	    // call c interface function to run cuda kernel
+	    heatmap_render_saturated_to_gpu(h, colorscheme, saturation, colorbuf);
+	   #endif
 
     return colorbuf;
 }
