@@ -8,7 +8,7 @@ ARCH= -gencode arch=compute_20,code=[sm_20,sm_21] \
       -gencode arch=compute_50,code=[sm_50,compute_50] \
       -gencode arch=compute_52,code=[sm_52,compute_52]
 AR?=ar
-GPU=1
+GPU=0
 COMMON=
 
 # Release mode (If just dropping the lib into your project, check out -flto too.)
